@@ -1,0 +1,176 @@
+@precedence {
+  typeApplication,
+  intersection @left,
+  union @left,
+  call
+}
+
+@top Program { topLevelDeclaration* }
+
+topLevelDeclaration {
+  ClassDeclaration |
+  ModuleDeclaration |
+  FunctionDeclaration |
+  LetDeclaration
+}
+
+ClassDeclaration {
+  kw<"abstract">?
+  kw<"class">
+  TypeName
+  TypeParameterList?
+  ClassParameterList?
+  ExtendsClause?
+}
+
+ModuleDeclaration {
+  kw<"module">
+  TypeName
+  ExtendsClause?
+}
+
+ExtendsClause { kw<"extends"> type }
+
+FunctionDeclaration {
+  kw<"fun"> UserDefinedOp? VariableName FunctionParameterList 
+  TypeAnnotation?
+  FunctionBody?
+}
+
+FunctionParameterList {
+  "(" commaSep0<FunctionParameter> ")"
+}
+
+FunctionParameter {
+  ParameterName TypeAnnotation?
+}
+
+FunctionBody { "=" expression }
+
+VariableName { identifier }
+
+UserDefinedOp { "(" userDefinedOp ")" }
+
+LetDeclaration {
+  kw<"let"> VariableName FunctionParameterList?
+  TypeAnnotation? FunctionBody
+}
+
+TypeName { identifier }
+
+TypeParameterList {
+  "[" commaSep1<TypeParameter> "]"
+}
+
+TypeParameter { Variance? TypeName }
+
+Variance { kw<"in"> | kw<"out"> }
+
+ClassParameterList { "(" commaSep0<ClassParameter> ")" }
+
+ClassParameter {
+  kw<"val">? ParameterName TypeAnnotation
+}
+
+ParameterName { identifier }
+
+type[@isGroup=Type] {
+  ThisType { kw<"this"> } |
+  TypeName |
+  TypeVariable |
+  LiteralType { boolean | Number | String } |
+  ParenthesizedType { "(" type ")" } |
+  UnionType { type (!union unionOp type)+ } |
+  TupleType { "[" commaSep0<type> "]" } |
+  RecordType |
+  IntersectionType { type (!intersection intersectionOp type)+ } |
+  TypeApplication { TypeName !typeApplication TypeArgumentList } |
+  ForallType { kw<"forall"> commaSep1<TypeVariable> "." type }
+}
+
+TypeVariable { "'" identifier }
+
+RecordType {
+  "{" commaSep0<PropertyName TypeAnnotation> "}"
+}
+
+PropertyName { identifier }
+
+TypeAnnotation { ":" type }
+
+TypeArgumentList[@dynamicPrecedence=1] { "[" commaSep0<type> "]" }
+
+expression[@isGroup=Expression] { simpleExpression }
+
+simpleExpression {
+  Number |
+  String |
+  VariableName |
+  boolean |
+  kw<"this"> |
+  kw<"super"> |
+  CallExpression {
+    simpleExpression !call FunctionArgumentList
+  }
+}
+
+FunctionArgumentList {
+  "(" commaSep0<simpleExpression> ")"
+}
+
+kw<term> { @specialize[@name={term}]<identifier, term> }
+
+commaSep0<content> {
+  "" | content ("," content?)*
+}
+
+commaSep1<content> {
+  content ("," content)*
+}
+
+unionOp[@name=LogicOp] { "|" }
+
+intersectionOp[@name=LogicOp] { "&" }
+
+boolean { @specialize[@name=BooleanLiteral]<identifier, "true" | "false"> }
+
+@skip { spaces | newline }
+
+@skip {} {
+  // String[isolate] {
+  String { // Comment this when not using lezer-playground
+    '"' (stringContentDouble | Escape)* ('"' | "\n")
+  }
+}
+
+@tokens {
+  spaces[@export] { $[\u0009 \u000b\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000\ufeff]+ }
+  newline[@export] { $[\r\n\u2028\u2029] }
+  identifierChar { @asciiLetter | $[_$\u{a1}-\u{10ffff}] }
+  word { identifierChar (identifierChar | @digit)* }
+  identifier { word "'"* }
+
+  @precedence { spaces, newline, identifier }
+
+  @precedence { spaces, newline, word }
+
+  hex { @digit | $[a-fA-F] }
+
+  Number {
+    (@digit ("_" | @digit)* ("." ("_" | @digit)*)? | "." @digit ("_" | @digit)*)
+      (("e" | "E") ("+" | "-")? ("_" | @digit)+)? |
+    @digit ("_" | @digit)* "n" |
+    "0x" (hex | "_")+ "n"? |
+    "0b" $[01_]+ "n"? |
+    "0o" $[0-7_]+ "n"?
+  }
+  @precedence { Number "." }
+
+  Escape {
+    "\\" ("x" hex hex | "u" ("{" hex+ "}" | hex hex hex hex) | ![xu])
+  }
+
+  stringContentDouble { ![\\\n"]+ }
+
+  userDefinedOp { $[<>|?:+-]+ }
+}
